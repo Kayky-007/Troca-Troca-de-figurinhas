@@ -1,0 +1,8 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+GET,/colecionadores/[id]/faltantes,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/faltantes'),598,2026-11-24T22:58:41Z,2026-11-24T23:00:11Z
+GET,/colecionadores/[id],HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]'),795,2026-11-24T22:58:41Z,2026-11-24T23:00:11Z
+GET,/colecionadores/[id]/sugestoes-troca,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/sugestoes-troca'),301,2026-11-24T22:58:41Z,2026-11-24T23:00:10Z
+GET,/colecionadores/[id]/repetidas,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/repetidas'),538,2026-11-24T22:58:42Z,2026-11-24T23:00:11Z
+POST,/colecionadores/[id]/pacotinho,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/pacotinho'),559,2026-11-24T22:58:41Z,2026-11-24T23:00:11Z
+GET,/colecionadores/[id]/album,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/album'),561,2026-11-24T22:58:41Z,2026-11-24T23:00:11Z
+GET,/colecionadores/[id]/trocas,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/trocas'),260,2026-11-24T22:58:41Z,2026-11-24T23:00:11Z

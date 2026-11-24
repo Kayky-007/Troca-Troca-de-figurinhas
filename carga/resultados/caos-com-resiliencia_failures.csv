@@ -1,0 +1,7 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/trocas,HTTPError('503 Server Error: Service Unavailable for url: /trocas'),230,2026-11-24T22:54:07Z,2026-11-24T22:55:37Z
+GET,/colecionadores/[id]/faltantes,HTTPError('503 Server Error: Service Unavailable for url: /colecionadores/[id]/faltantes'),15,2026-11-24T22:54:22Z,2026-11-24T22:55:35Z
+POST,/trocas,HTTPError('502 Server Error: Bad Gateway for url: /trocas'),1,2026-11-24T22:54:17Z,2026-11-24T22:54:17Z
+GET,/colecionadores/[id]/repetidas,HTTPError('503 Server Error: Service Unavailable for url: /colecionadores/[id]/repetidas'),5,2026-11-24T22:54:10Z,2026-11-24T22:55:10Z
+POST,/colecionadores/[id]/pacotinho,HTTPError('502 Server Error: Bad Gateway for url: /colecionadores/[id]/pacotinho'),3,2026-11-24T22:54:07Z,2026-11-24T22:55:07Z
+POST,/colecionadores/[id]/pacotinho,HTTPError('503 Server Error: Service Unavailable for url: /colecionadores/[id]/pacotinho'),576,2026-11-24T22:54:07Z,2026-11-24T22:55:38Z

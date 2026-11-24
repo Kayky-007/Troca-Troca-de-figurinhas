@@ -5,6 +5,7 @@
 
 const express = require('express')
 const { medirRequisicoes, rotaMetrics } = require('../compartilhado/metricas')
+const { rotasCaos, injetarFalha } = require('../compartilhado/caos')
 const { conectar } = require('../compartilhado/db')
 
 const app = express()
@@ -13,6 +14,10 @@ const PORTA = process.argv[2] || process.env.PORTA || 4001
 app.use(express.json())
 app.use(medirRequisicoes)
 app.get('/metrics', rotaMetrics)
+
+// injecao de falha pro experimento de caos
+rotasCaos(app)
+app.use(injetarFalha)
 
 const seguro = (fn) => (req, res, next) => fn(req, res).catch(next)
 

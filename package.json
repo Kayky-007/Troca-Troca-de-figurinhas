@@ -11,7 +11,9 @@
     "gateway": "cross-env WORKERS=2 node gateway/server.js",
     "micro": "concurrently -n album1,album2,trocas,gateway \"npm:album1\" \"npm:album2\" \"npm:trocas\" \"npm:gateway\"",
     "micro:sem-otimizacao": "cross-env ALBUM_MODO=n1 DB_POOL=off HTTP_KEEPALIVE=off GZIP=off CACHE=off WORKERS=1 concurrently -n album1,album2,trocas,gateway \"node servico-album/server.js 4001\" \"node servico-album/server.js 4011\" \"node servico-trocas/server.js 4002\" \"node gateway/server.js\"",
-    "benchmark": "node carga/benchmark-estruturas.js"
+    "micro:sem-resiliencia": "cross-env RESILIENCIA=off npm run micro",
+    "benchmark": "node carga/benchmark-estruturas.js",
+    "caos": "node carga/caos.js"
   },
   "dependencies": {
     "compression": "1.8.2",

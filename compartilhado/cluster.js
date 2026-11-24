@@ -35,6 +35,16 @@ function rodarEmCluster(nome, porta, iniciarApp) {
       cluster.fork()
     })
 
+    // quando um worker liga/desliga o caos, repassa pros outros
+    // senao so o worker que recebeu o POST ficaria com falha
+    cluster.on('message', (worker, msg) => {
+      if (msg && msg.tipo === 'caos') {
+        for (const id in cluster.workers) {
+          cluster.workers[id].send(msg)
+        }
+      }
+    })
+
     const registro = new AggregatorRegistry()
     const portaMetricas = Number(porta) + 100
     const app = express()

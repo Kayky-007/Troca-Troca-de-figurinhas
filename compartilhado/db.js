@@ -41,7 +41,24 @@ if (USAR_POOL) {
 }
 
 async function conectar(req) {
-  let conn
+  let conn = null
+  let terminou = false
+
+  const devolver = () => {
+    if (USAR_POOL) conn.release()
+    else conn.end().catch(() => {})
+    conexoesAtivas.dec()
+  }
+
+  // no final da requisicao devolve pro pool (ou fecha, se nao tiver pool)
+  // tem que registrar ANTES de pegar a conexao: se o gateway desistir (timeout) enquanto
+  // a gente espera na fila do pool, o 'close' dispara antes e a conexao nunca voltava.
+  // com 10 conexoes perdidas o worker travava de vez
+  req.res.on('close', () => {
+    terminou = true
+    if (conn) devolver()
+  })
+
   if (USAR_POOL) {
     conn = await pool.getConnection()
   } else {
@@ -50,15 +67,15 @@ async function conectar(req) {
   }
   conexoesAtivas.inc()
 
-  // no final da requisicao devolve pro pool (ou fecha, se nao tiver pool)
-  req.res.on('close', () => {
-    if (USAR_POOL) conn.release()
-    else conn.end().catch(() => {})
-    conexoesAtivas.dec()
-  })
+  if (terminou) {
+    devolver()
+    throw new Error('cliente desistiu antes de pegar conexao no banco')
+  }
 
   return {
     async query(sql, params) {
+      // conexao ja foi devolvida, nao pode mais usar
+      if (terminou) throw new Error('cliente desistiu no meio da requisicao')
       req.qtdQueries++
       const [linhas] = await conn.query(sql, params)
       return linhas

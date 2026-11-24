@@ -23,15 +23,28 @@ const conexoesAtivas = new client.Gauge({
 })
 
 async function conectar(req) {
-  const conn = await mysql.createConnection(config)
+  let conn = null
+  let terminou = false
+
+  // fecha quando a resposta terminar
+  // registra antes de conectar, senao se o cliente desistir no meio a conexao fica aberta pra sempre
+  req.res.on('close', () => {
+    terminou = true
+    if (conn) {
+      conn.end().catch(() => {})
+      conexoesAtivas.dec()
+    }
+  })
+
+  conn = await mysql.createConnection(config)
   conexoesAbertas.inc()
   conexoesAtivas.inc()
 
-  // fecha quando a resposta terminar
-  req.res.on('close', () => {
+  if (terminou) {
     conn.end().catch(() => {})
     conexoesAtivas.dec()
-  })
+    throw new Error('cliente desistiu antes de conectar no banco')
+  }
 
   return {
     // conta cada query pra metrica db_queries_total

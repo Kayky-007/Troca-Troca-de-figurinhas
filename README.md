@@ -255,6 +255,122 @@ Simula as sugestões de troca com o tamanho do nosso banco (980 figurinhas, ~29 
 - cache hit de 99,6%, o serviço de album quase não recebe mais chamada (0,07 por segundo)
 - sugestoes-troca: P50 de 120 ms pra 88 ms com o Set
 
+## Etapa 6 - resiliencia e caos
+
+Tudo isso fica no gateway, nas chamadas pros serviços (`gateway/resiliencia.js` e `gateway/server.js`):
+
+- **timeout**: se o serviço não responder em 2s o gateway desiste (`AbortSignal.timeout`)
+- **retry com backoff exponencial**: GET que deu erro de conexão ou 5xx tenta de novo mais 2 vezes, esperando ~100ms e depois ~200ms (com um aleatorio pra não voltar todo mundo junto). POST não repete (senão abre 2 pacotinhos) e timeout também não (se o serviço ta lento, mandar mais requisição só piora)
+- **circuit breaker** feito na mão, um por instancia (album-4001, album-4011, trocas-4002):
+  - fechado: anota as ultimas 20 chamadas, se pelo menos 10 e metade ou mais deu erro, abre
+  - aberto: nem chama o serviço, responde na hora (fail fast) por 10s
+  - meio-aberto: deixa passar 1 chamada de teste. deu certo fecha, deu errado abre de novo
+  - no album o round robin pula a replica com circuito aberto, então se uma cair a outra segura
+- **fallback** (degradação controlada):
+  - `/album`: devolve a ultima copia boa que o gateway recebeu
+  - leituras do colecionador: ultima resposta boa daquela url. Se não tiver, `sugestoes-troca` e `trocas` voltam lista vazia, e o `/colecionadores/:id/album` mostra o album com `tenho: null`
+  - escrita (pacotinho, trocas): 503 rapido com `Retry-After`, não da pra inventar resposta
+  - resposta de fallback vem com o header `X-Fallback` e conta na metrica `fallback_total`
+
+Pra comparar da pra desligar tudo isso com `RESILIENCIA=off` (`npm run micro:sem-resiliencia`). Outras chaves: `TIMEOUT_MS` (padrao 2000) e `TENTATIVAS` (padrao 3).
+
+Pra ver o estado dos circuitos: `curl http://localhost:3000/circuitos` (mostra o worker que respondeu) ou no Grafana, linha "Resiliencia e caos".
+
+### Injetando falha (caos)
+
+Os dois serviços tem as rotas de caos:
+
+| Rota | O que faz |
+|---|---|
+| POST /caos/ativar-falha?tipo=erro&taxa=100 | responde 500 em 100% das requisicoes |
+| POST /caos/ativar-falha?tipo=lentidao&taxa=100 | demora 5s pra responder (cai no timeout do gateway) |
+| POST /caos/desativar | volta ao normal |
+| GET /caos | mostra como esta |
+
+Pelo script fica mais facil:
+
+```
+npm run caos -- ligar trocas
+npm run caos -- ligar trocas lentidao 100
+npm run caos -- ligar album1
+npm run caos -- desligar trocas
+npm run caos -- status
+```
+
+No servico de trocas (que roda em cluster) o worker que recebe o POST avisa o processo principal, e ele repassa pros outros workers. Senão só metade ficaria com falha.
+
+### Experimento
+
+Hipotese: se o serviço de trocas cair, o circuit breaker abre e o gateway continua respondendo as leituras pelo fallback, sem a latencia subir. So as escritas falham.
+
+Locust com 100 usuarios por 4 minutos: 1 minuto normal, liga `erro 100%` no trocas, desliga depois de 90s.
+
+```
+python -m locust -f carga/locustfile.py --host http://localhost:3000 --headless -u 100 -r 10 -t 4m --csv carga/resultados/caos-com-resiliencia --html carga/resultados/caos-com-resiliencia.html
+```
+
+(no meio, em outro terminal: `npm run caos -- ligar trocas` e depois `npm run caos -- desligar trocas`)
+
+Com resiliencia:
+
+| Fase | RPS | Falhas | P50 | P95 | P99 |
+|---|---|---|---|---|---|
+| normal | 58,2 | 0% | 11 ms | 71 ms | 152 ms |
+| trocas fora do ar | 55,1 | 16,1% | 7 ms | 55 ms | 127 ms |
+| depois que voltou | 58,9 | 0,1% | 7 ms | 53 ms | 112 ms |
+
+Sem resiliencia (`RESILIENCIA=off`), mesmo teste:
+
+| Fase | RPS | Falhas | P50 | P95 | P99 |
+|---|---|---|---|---|---|
+| normal | 58,0 | 0% | 13 ms | 75 ms | 126 ms |
+| trocas fora do ar | 49,8 | 78,6% | 8 ms | 58 ms | 108 ms |
+| depois que voltou | 58,0 | 0,2% | 8 ms | 68 ms | 164 ms |
+
+Falhas por rota no teste inteiro:
+
+| Rota | Sem resiliencia | Com resiliencia |
+|---|---|---|
+| GET /colecionadores/[id] | 795 | 0 |
+| GET /colecionadores/[id]/album | 561 | 0 |
+| GET /colecionadores/[id]/faltantes | 598 | 15 |
+| GET /colecionadores/[id]/repetidas | 538 | 5 |
+| GET /colecionadores/[id]/sugestoes-troca | 301 | 0 |
+| POST /colecionadores/[id]/pacotinho | 559 | 579 |
+| Total | 3612 (27,9%) | 830 (6,2%) |
+
+A hipotese se confirmou: durante a falha as leituras continuaram funcionando (as poucas que falharam foram de url que o gateway nunca tinha visto, então não tinha copia). O que falhou foram as escritas, que não tem como ter fallback. O circuito abriu em menos de 1 segundo e fechou uns 8 segundos depois do serviço voltar (na proxima chamada de teste do meio-aberto).
+
+Com o erro sendo 500 imediato a latencia não muda muito nos dois casos. Com `lentidao` a diferença é maior: sem resiliencia cada requisição fica presa 5s esperando o serviço.
+
+### Bug que o caos achou
+
+Na primeira vez que rodamos o experimento o serviço de trocas continuava travado mesmo depois de desligar a falha. O problema era no `compartilhado/db.js`: quando o gateway desistia (timeout) enquanto a requisição ainda estava esperando conexão no pool, o evento `close` da resposta disparava antes da gente registrar o `res.on('close')`, e a conexão nunca voltava pro pool. Depois de 10 perdidas o worker travava de vez. A correção foi registrar o `close` antes de pedir a conexão. O monolito tinha o mesmo problema.
+
+### Dica pra gravar
+
+O banco frio (logo depois do `docker compose up`) deixa as primeiras queries lentas e o circuito pode abrir sozinho por timeout. Roda 1 minuto de Locust antes de gravar pra aquecer.
+
+O Locust no Python 3.14 as vezes mostra um `ValueError: I/O operation on closed file` no final. É bug dele ao fechar o csv, os resultados são salvos normal.
+
+## Onde esta cada requisito da atividade
+
+| Requisito | Onde |
+|---|---|
+| /metrics, Counter, Gauge, Histogram | `compartilhado/metricas.js`, metricas de negocio no `servico-trocas/server.js` |
+| Prometheus e Grafana | `observabilidade/prometheus.yml`, `observabilidade/grafana/dashboards/figurinhas.json` |
+| Monolito x microsservicos | `monolito/` x `gateway/`, `servico-album/`, `servico-trocas/` |
+| Escala horizontal (round robin) | 2 replicas do album, `urlAlbum()` no gateway |
+| N+1 x JOIN | `servico-album/server.js` (`/admin/modo/n1` e `/admin/modo/join`) |
+| Pool de conexões | `compartilhado/db.js` (MySQL) e `Agent` do undici no gateway (HTTP) |
+| Gzip e Cache-Control | `gateway/server.js` |
+| O(1) x O(n) | `servico-trocas/server.js` e `npm run benchmark` |
+| Cache LRU com TTL | `gateway/server.js`, metrica `cache_requests_total` |
+| Servidor de produção | `compartilhado/cluster.js` (cluster do Node, varios processos) |
+| Teste de carga | `carga/locustfile.py`, resultados em `carga/resultados/` |
+| Timeout, retry, circuit breaker, fallback | `gateway/resiliencia.js` e `gateway/server.js` |
+| Caos | `compartilhado/caos.js` e `npm run caos` |
+
 ## Portas dos apps
 
 | App | Porta |
