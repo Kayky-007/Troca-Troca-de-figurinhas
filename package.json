@@ -1,0 +1,28 @@
+{
+  "name": "troca-troca-figurinhas",
+  "version": "1.0.0",
+  "description": "Album de figurinhas com trocas - atividade de performance e escala",
+  "private": true,
+  "scripts": {
+    "monolito": "node monolito/server.js",
+    "album1": "node servico-album/server.js 4001",
+    "album2": "node servico-album/server.js 4011",
+    "trocas": "cross-env WORKERS=2 node servico-trocas/server.js 4002",
+    "gateway": "cross-env WORKERS=2 node gateway/server.js",
+    "micro": "concurrently -n album1,album2,trocas,gateway \"npm:album1\" \"npm:album2\" \"npm:trocas\" \"npm:gateway\"",
+    "micro:sem-otimizacao": "cross-env ALBUM_MODO=n1 DB_POOL=off HTTP_KEEPALIVE=off GZIP=off CACHE=off WORKERS=1 concurrently -n album1,album2,trocas,gateway \"node servico-album/server.js 4001\" \"node servico-album/server.js 4011\" \"node servico-trocas/server.js 4002\" \"node gateway/server.js\"",
+    "benchmark": "node carga/benchmark-estruturas.js"
+  },
+  "dependencies": {
+    "compression": "1.8.2",
+    "express": "4.22.3",
+    "lru-cache": "11.2.2",
+    "mysql2": "3.24.6",
+    "prom-client": "15.1.3",
+    "undici": "7.30.2"
+  },
+  "devDependencies": {
+    "concurrently": "9.2.5",
+    "cross-env": "7.0.3"
+  }
+}

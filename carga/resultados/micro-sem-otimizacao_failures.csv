@@ -1,0 +1,2 @@
+Method,Name,Error,Occurrences,First Seen,Last Seen
+POST,/colecionadores/[id]/pacotinho,HTTPError('500 Server Error: Internal Server Error for url: /colecionadores/[id]/pacotinho'),1,2026-11-19T02:04:54Z,2026-11-19T02:04:54Z

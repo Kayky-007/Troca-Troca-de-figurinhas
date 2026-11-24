@@ -1,0 +1,9 @@
+apiVersion: 1
+
+# carrega os json de dashboard dessa pasta
+providers:
+  - name: figurinhas
+    folder: Figurinhas
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards

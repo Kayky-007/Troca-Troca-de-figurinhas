@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 5s
+
+# os apps rodam fora do docker, por isso host.docker.internal
+# gateway e trocas em cluster mostram as metricas na porta + 100 (3100 e 4102)
+# sem cluster elas ficam na porta normal (3000 e 4002), por isso tem as duas
+scrape_configs:
+  - job_name: monolito
+    static_configs:
+      - targets: ["host.docker.internal:3001"]
+
+  - job_name: gateway
+    static_configs:
+      - targets: ["host.docker.internal:3000", "host.docker.internal:3100"]
+
+  - job_name: album
+    static_configs:
+      - targets: ["host.docker.internal:4001", "host.docker.internal:4011"]
+
+  - job_name: trocas
+    static_configs:
+      - targets: ["host.docker.internal:4002", "host.docker.internal:4102"]
